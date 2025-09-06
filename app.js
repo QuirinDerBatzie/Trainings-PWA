@@ -1,5 +1,5 @@
 /* ============
-   Training Log PWA – App Logic
+   Training Log PWA – App Logic (vollständige Version mit Start-Button-Hide)
    ============ */
 
 // ---- Storage helpers (LocalStorage, simpel & robust) ----
@@ -69,9 +69,8 @@ function ensureDefaults() {
 // ---- State ----
 let state = {
   currentTrainingId: null,
-  session: null, // {trainingId, exerciseQueue, done:[], startedAt}
+  session: null, // {trainingId, exerciseQueue, done:[], startedAt, results:[]}
   currentExerciseId: null,
-  lastDifficultyForExercise: {}, // cache UI state
   restTimerInterval: null,
   restStartTs: null,
   historyChart: null,
@@ -144,7 +143,7 @@ function startSession(trainingId){
     exerciseQueue: [...t.exerciseIds],
     done: [],
     startedAt: new Date().toISOString(),
-    results: [], // for summary
+    results: [],
   };
   state.restStartTs = Date.now();
   startRestTimer();
@@ -156,22 +155,27 @@ function startSession(trainingId){
 function renderExercisePicker(){
   const wrap = $("#exerciseButtons");
   wrap.innerHTML = "";
-  const { exerciseQueue, done } = state.session;
+  const { exerciseQueue } = state.session;
 
-  // Buttons
   exerciseQueue.forEach(id=>{
     const ex = getExercise(id);
     const btn = document.createElement("button");
     btn.className = "primary-btn";
     btn.textContent = ex?.name ?? id;
     btn.addEventListener("click", ()=> openExercise(id));
-    // if done already (shouldn't happen here), gray out
     wrap.appendChild(btn);
   });
 
-  // Done state?
   if (state.session.exerciseQueue.length === 0){
     $("#allDone").classList.remove("hidden");
+    const s = $("#sessionSummary");
+    s.innerHTML = state.session.results.map(r=>(
+      `<div class="row">
+        <span class="pill">${r.name}</span>
+        <span class="pill">${r.load||"—"}</span>
+        <span class="pill">${r.difficulty}</span>
+      </div>`
+    )).join("");
   } else {
     $("#allDone").classList.add("hidden");
   }
@@ -198,17 +202,20 @@ function openExercise(exId){
   const input = $("#loadInput");
   input.value = last?.load ?? "";
 
-  // difficulty buttons
-  $$(".diff-btn").forEach(btn=>{
-    btn.dataset.selected = "false";
-  });
+  // Difficulty Buttons: letzte Auswahl markieren
+  $$(".diff-btn").forEach(btn=>{ btn.dataset.selected = "false"; });
   if (last?.difficulty){
     const btn = $(`.diff-btn[data-val="${last.difficulty}"]`);
     if (btn) btn.dataset.selected = "true";
   }
 
+  // Timer/Buttons UI initialisieren
   $("#timerUI").classList.add("hidden");
   $("#saveAndNextBtn").classList.add("hidden");
+
+  // WICHTIG: Start-Button beim Öffnen EINBLENDEN (sichtbar je Übung genau 1x)
+  $("#startExerciseBtn").classList.remove("hidden");
+
   showScreen("screen-exercise");
 }
 
@@ -216,6 +223,7 @@ $("#backToPickerBtn").addEventListener("click", ()=>{
   showScreen("screen-exercise-picker");
 });
 
+// Difficulty Selection (segmented)
 $(".difficulty-row")?.addEventListener?.("click", (e)=>{
   const btn = e.target.closest(".diff-btn");
   if (!btn) return;
@@ -223,7 +231,11 @@ $(".difficulty-row")?.addEventListener?.("click", (e)=>{
   btn.dataset.selected = "true";
 });
 
-$("#startExerciseBtn").addEventListener("click", startExerciseTimer);
+// Übung starten Button – nach Klick ausblenden (bleibt weg)
+document.getElementById("startExerciseBtn").addEventListener("click", () => {
+  document.getElementById("startExerciseBtn").classList.add("hidden");
+  startExerciseTimer();
+});
 
 function playBeep(which){
   const withSound = $("#withSound").checked;
@@ -233,20 +245,23 @@ function playBeep(which){
   el.play().catch(()=>{ /* ignore autoplay restrictions */ });
 }
 
-// 3s countdown, then 10 reps: up 5s (green), down 5s (red)
+// 3s countdown, dann 10 Reps: up 5s (green), down 5s (red)
 async function startExerciseTimer(){
   const countdown = $("#countdown");
   const repCounter = $("#repCounter");
   const phaseNumber = $("#phaseNumber");
   const phaseText = $("#repPhase");
+
   $("#timerUI").classList.remove("hidden");
   $("#saveAndNextBtn").classList.add("hidden");
 
   // 3..2..1
   for (let c=3;c>=1;c--){
+    // Zahl über "GO": (CSS ordnet phaseNumber > countdown)
+    phaseNumber.textContent = "–";
     countdown.textContent = String(c);
     phaseText.textContent = "Bereit …";
-    phaseNumber.textContent = "–";
+    repCounter.textContent = "0 / 10";
     await wait(1000);
   }
   countdown.textContent = "GO";
@@ -301,32 +316,20 @@ $("#saveAndNextBtn").addEventListener("click", ()=>{
   });
   saveJSON(LS_KEYS.LOGS, logs);
 
-  // Remove exercise from queue, add to done
+  // Exercise aus Queue entfernen
   const idx = state.session.exerciseQueue.indexOf(exId);
   if (idx >= 0) state.session.exerciseQueue.splice(idx,1);
 
-  // For summary
+  // Für Zusammenfassung
   const ex = getExercise(exId);
   state.session.results.push({
     name: ex?.name ?? exId,
     load, difficulty
   });
 
-  // Back to picker
+  // Zurück zur Auswahl + Resttimer neu
   startRestTimer();
   renderExercisePicker();
-
-  // Summary check
-  if (state.session.exerciseQueue.length === 0){
-    const s = $("#sessionSummary");
-    s.innerHTML = state.session.results.map(r=>(
-      `<div class="row">
-        <span class="pill">${r.name}</span>
-        <span class="pill">${r.load||"—"}</span>
-        <span class="pill">${r.difficulty}</span>
-      </div>`
-    )).join("");
-  }
   showScreen("screen-exercise-picker");
 });
 
@@ -548,7 +551,6 @@ function drawHistory(exId){
   }).filter(p=>p.y!==null).sort((a,b)=>a.x-b.x);
 
   const colors = { Easy: "#26d07c", OK: "#ffc857", Hard: "#ff5a5f" };
-  const pointStyles = data.map(p=> ({ backgroundColor: colors[p.difficulty] || "#2f80ed" }));
 
   if (state.historyChart) { state.historyChart.destroy(); }
   state.historyChart = new Chart(ctx, {

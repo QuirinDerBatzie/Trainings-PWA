@@ -1,4 +1,4 @@
-const CACHE = "training-log-cache-v1";
+const CACHE = "training-log-cache-v2";
 const ASSETS = [
   "./",
   "./index.html",
@@ -41,3 +41,4 @@ self.addEventListener("fetch", (e)=>{
     caches.match(e.request).then(cached => cached || fetch(e.request))
   );
 });
+

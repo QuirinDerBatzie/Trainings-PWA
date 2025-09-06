@@ -1,4 +1,4 @@
-/* ===== Training Log – clean & compact (v2) ===== */
+/* ===== Training Log – clean & compact (table history) ===== */
 :root{
   --bg:#0c0f13;
   --panel:#0f1319;
@@ -43,8 +43,7 @@ h2{font-size:24px; letter-spacing:.2px}
 /* Card, Inputs */
 .card{
   background:var(--card); border:1px solid var(--line); border-radius:14px;
-  padding:14px; margin:12px 0;
-  box-shadow:0 6px 18px rgba(0,0,0,.25);
+  padding:14px; margin:12px 0; box-shadow:0 6px 18px rgba(0,0,0,.25);
 }
 .label{display:block; color:var(--muted); font-size:13px; margin:6px 0 6px}
 .input,.select{
@@ -93,7 +92,7 @@ h2{font-size:24px; letter-spacing:.2px}
 .diff-btn[data-val="Hard"]{background:#2a1212}
 .diff-btn[data-selected="true"]{outline:2px solid var(--accent)}
 
-/* Timer – Zahl ÜBER „GO“ (per order) */
+/* Timer – Zahl ÜBER „GO“ */
 .timer-ui{
   display:flex; flex-direction:column; align-items:center; gap:8px; margin-top:16px
 }
@@ -131,19 +130,15 @@ h2{font-size:24px; letter-spacing:.2px}
   background:linear-gradient(180deg, transparent 0%, var(--bg) 45%);
   padding:10px 14px 18px; display:flex; justify-content:center; gap:10px;
 }
-
-/* „Nächste Übung“ (existiert schon) */
 .footer-actions .primary-btn{
   width:min(640px,100%); font-size:18px; padding:14px 18px; border-radius:14px;
 }
 
-/* „Übung starten“ nach unten ziehen */
+/* „Übung starten“ fest über dem unteren Button */
 #startExerciseBtn{
   position:fixed; left:50%; transform:translateX(-50%);
-  bottom:72px; /* etwas über dem anderen Button, damit nie überlappt */
-  width:min(640px, 92%);
-  font-size:18px; padding:14px 18px; border-radius:14px;
-  z-index:35;
+  bottom:72px; width:min(640px, 92%);
+  font-size:18px; padding:14px 18px; border-radius:14px; z-index:35;
 }
 
 /* Rotation rows */
@@ -157,3 +152,32 @@ h2{font-size:24px; letter-spacing:.2px}
   border:1px solid var(--line); padding:12px 14px; border-radius:12px; cursor:pointer
 }
 .file-btn input{display:none}
+
+/* ===== Verlauf: Tabelle ===== */
+.tbl{
+  width:100%; border-collapse:separate; border-spacing:0 8px;
+}
+.tbl thead th{
+  text-align:left; font-weight:700; color:var(--muted); font-size:13px; padding:0 8px 6px;
+  border-bottom:1px solid var(--line);
+}
+.tbl tbody tr{
+  background:#0e141c; border:1px solid var(--line);
+}
+.tbl tbody td{
+  padding:10px 12px; font-size:15px;
+  border-top:1px solid var(--line); border-bottom:1px solid var(--line);
+}
+.tbl tbody td:first-child{
+  border-left:1px solid var(--line); border-top-left-radius:12px; border-bottom-left-radius:12px;
+}
+.tbl tbody td:last-child{
+  border-right:1px solid var(--line); border-top-right-radius:12px; border-bottom-right-radius:12px;
+}
+
+.badge{
+  display:inline-block; padding:6px 10px; border-radius:10px; font-weight:700;
+}
+.badge-easy{ background:#11281a; color:#8ff0b2; border:1px solid #154a29 }
+.badge-ok{   background:#2a2511; color:#ffe08a; border:1px solid #4f3e18 }
+.badge-hard{ background:#2a1212; color:#ff9aa0; border:1px solid #4f1c1c }

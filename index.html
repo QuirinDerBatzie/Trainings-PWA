@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1, user-scalable=no"
+  />
+  <title>Training Log – PWA</title>
+  <link rel="manifest" href="manifest.json" />
+  <link rel="stylesheet" href="style.css" />
+  <meta name="theme-color" content="#111111" />
+  <link rel="icon" href="icons/icon-192.png" />
+  <!-- Chart.js (für Verlauf). Wird offline gecached vom Service Worker -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+  <header class="app-header">
+    <button id="menuBtn" aria-label="Menü" class="icon-btn">☰</button>
+    <h1 id="appTitle">Training Log</h1>
+    <span class="spacer"></span>
+  </header>
+
+  <main id="app">
+
+    <!-- DASHBOARD -->
+    <section id="screen-dashboard" class="screen active">
+      <h2 id="todayTrainingHeading">Heute: –</h2>
+      <div class="card">
+        <label for="overrideSelect" class="label">Anderes Training wählen</label>
+        <select id="overrideSelect" class="select">
+          <option value="">Nein</option>
+        </select>
+        <button id="startTrainingBtn" class="primary-btn">Training starten</button>
+      </div>
+
+      <div class="hint">
+        Rotation: 1.–7. (T1) · 8.–14. (T2) · 15.–21. (T3) · 22.–Ende (T4)
+      </div>
+    </section>
+
+    <!-- TRAINING: ÜBUNGSAUSWAHL -->
+    <section id="screen-exercise-picker" class="screen">
+      <h2 id="trainingTitle">Training</h2>
+      <div id="restTimer" class="rest-timer">Pause: 00:00</div>
+      <div id="exerciseButtons" class="grid"></div>
+      <div id="allDone" class="hidden">
+        <div class="card summary">
+          <h3>Zusammenfassung</h3>
+          <div id="sessionSummary"></div>
+        </div>
+        <button id="endSessionBtn" class="primary-btn">Training beenden</button>
+      </div>
+    </section>
+
+    <!-- TRAINING: ÜBUNG-DETAIL -->
+    <section id="screen-exercise" class="screen">
+      <div class="exercise-header">
+        <button id="backToPickerBtn" class="icon-btn">←</button>
+        <h2 id="exerciseName">Übung</h2>
+      </div>
+
+      <div class="card">
+        <label class="label" for="loadInput">Load</label>
+        <input id="loadInput" class="input" placeholder="z. B. 60 kg / Band stark / BW+10" />
+        <div class="difficulty-row">
+          <button class="diff-btn" data-val="Easy">Easy</button>
+          <button class="diff-btn" data-val="OK">OK</button>
+          <button class="diff-btn" data-val="Hard">Hard</button>
+        </div>
+        <label class="checkbox">
+          <input type="checkbox" id="withSound" /> mit Ton
+        </label>
+        <button id="startExerciseBtn" class="primary-btn">Übung starten</button>
+      </div>
+
+      <div id="timerUI" class="timer-ui hidden">
+        <div id="countdown" class="countdown">3</div>
+        <div id="repPhase" class="phase">Bereit …</div>
+        <div id="repCounter" class="rep-counter">0 / 10</div>
+        <div id="phaseNumber" class="phase-number">–</div>
+      </div>
+
+      <div class="footer-actions">
+        <button id="saveAndNextBtn" class="primary-btn hidden">Nächste Übung</button>
+      </div>
+    </section>
+
+    <!-- MENÜ -->
+    <section id="screen-menu" class="screen">
+      <div class="menu-list">
+        <button class="list-btn" data-target="screen-rotation">Rotation</button>
+        <button class="list-btn" data-target="screen-trainings">Trainings</button>
+        <button class="list-btn" data-target="screen-exercises">Übungen</button>
+        <button id="exportBtn" class="list-btn">Export (JSON)</button>
+        <label class="file-btn">
+          Import (JSON)
+          <input type="file" id="importFile" accept="application/json" />
+        </label>
+        <button id="backToDashboardBtn" class="list-btn">Zurück</button>
+      </div>
+    </section>
+
+    <!-- MENÜ: ROTATION -->
+    <section id="screen-rotation" class="screen">
+      <h2>Rotation</h2>
+      <div class="card">
+        <div class="rot-row">
+          <label>Training 1 (1.–7.)</label>
+          <select id="rotT1" class="select"></select>
+        </div>
+        <div class="rot-row">
+          <label>Training 2 (8.–14.)</label>
+          <select id="rotT2" class="select"></select>
+        </div>
+        <div class="rot-row">
+          <label>Training 3 (15.–21.)</label>
+          <select id="rotT3" class="select"></select>
+        </div>
+        <div class="rot-row">
+          <label>Training 4 (22.–Ende)</label>
+          <select id="rotT4" class="select"></select>
+        </div>
+        <button id="saveRotationBtn" class="primary-btn">Rotation speichern</button>
+        <button class="secondary-btn to-menu">Zurück</button>
+      </div>
+    </section>
+
+    <!-- MENÜ: TRAININGS -->
+    <section id="screen-trainings" class="screen">
+      <h2>Trainings</h2>
+      <div id="trainingList" class="list"></div>
+      <div class="card">
+        <h3>Neues Training</h3>
+        <label class="label">Titel</label>
+        <input id="newTrainingTitle" class="input" placeholder="z. B. Gym 3" />
+        <button id="createTrainingBtn" class="primary-btn">Training erstellen</button>
+      </div>
+      <button class="secondary-btn to-menu">Zurück</button>
+    </section>
+
+    <!-- MENÜ: ÜBUNGEN -->
+    <section id="screen-exercises" class="screen">
+      <h2>Übungen</h2>
+      <div id="exerciseList" class="list"></div>
+      <div class="card">
+        <h3>Neue Übung</h3>
+        <label class="label">Name</label>
+        <input id="newExerciseName" class="input" placeholder="z. B. Chest Press" />
+        <label class="label">Kategorie</label>
+        <select id="newExerciseClass" class="select">
+          <option value="Push">Push</option>
+          <option value="Pull">Pull</option>
+          <option value="Legs">Legs</option>
+          <option value="Core">Core</option>
+        </select>
+        <button id="createExerciseBtn" class="primary-btn">Übung hinzufügen</button>
+      </div>
+      <button class="secondary-btn to-menu">Zurück</button>
+    </section>
+
+    <!-- VERLAUF pro Übung -->
+    <section id="screen-history" class="screen">
+      <h2>Verlauf je Übung</h2>
+      <label class="label">Übung wählen</label>
+      <select id="historyExerciseSelect" class="select"></select>
+      <div class="card">
+        <canvas id="historyChart" height="160"></canvas>
+      </div>
+      <button class="secondary-btn to-menu">Zurück</button>
+    </section>
+
+  </main>
+
+  <audio id="beepHi" preload="auto">
+    <source src="data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAESsAACJWAAACABAAZGF0YQAAAAA=" type="audio/wav">
+  </audio>
+  <audio id="beepLo" preload="auto">
+    <source src="data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAESsAACJWAAACABAAZGF0YQAAAAA=" type="audio/wav">
+  </audio>
+
+  <script src="app.js"></script>
+  <script>
+    if ("serviceWorker" in navigator) {
+      window.addEventListener("load", () => {
+        navigator.serviceWorker.register("service-worker.js");
+      });
+    }
+  </script>
+</body>
+</html>

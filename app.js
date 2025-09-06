@@ -1,5 +1,5 @@
 /* ============
-   Training Log PWA – App Logic (Sound fix + Verlauf-Fallback)
+   Training Log PWA – App Logic (Table History + WebAudio Beeps)
    ============ */
 
 // ---- Storage helpers (LocalStorage) ----
@@ -67,7 +67,6 @@ let state = {
   currentExerciseId: null,
   restTimerInterval: null,
   restStartTs: null,
-  historyChart: null,
   audioCtx: null, // WebAudio
 };
 
@@ -85,6 +84,11 @@ function fmtTime(ms){
   const m = Math.floor(s/60);
   const ss = s % 60;
   return `${String(m).padStart(2,"0")}:${String(ss).padStart(2,"0")}`;
+}
+
+function fmtDate(isoStr){
+  const d = new Date(isoStr);
+  return d.toLocaleDateString(undefined, { year:"2-digit", month:"2-digit", day:"2-digit" });
 }
 
 function todayTrainingIdByDate(date=new Date()){
@@ -219,13 +223,12 @@ $(".difficulty-row")?.addEventListener?.("click", (e)=>{
   btn.dataset.selected = "true";
 });
 
-// ---- WebAudio: zuverlässiger Beep (ohne Audio-Files) ----
+// ---- WebAudio: Beeps ----
 function ensureAudioCtx(){
   if (!state.audioCtx) {
     const ACtx = window.AudioContext || window.webkitAudioContext;
     if (ACtx) state.audioCtx = new ACtx();
   }
-  // Manche Browser pausieren Context – beim User-Click wieder aufnehmen
   if (state.audioCtx && state.audioCtx.state === "suspended") {
     state.audioCtx.resume().catch(()=>{});
   }
@@ -271,7 +274,6 @@ async function startExerciseTimer(){
     await wait(1000);
   }
   countdown.textContent = "GO";
-  // kurzer Start-Beep
   beep({freq:900, duration:100, type:"sine"});
 
   for (let rep=1;rep<=10;rep++){
@@ -351,6 +353,7 @@ $$(".menu-list .list-btn[data-target]").forEach(btn=>{
       if (target === "screen-rotation") renderRotation();
       if (target === "screen-trainings") renderTrainings();
       if (target === "screen-exercises") renderExercises();
+      if (target === "screen-history") renderHistoryInit();
       showScreen(target);
     }
   });
@@ -514,7 +517,7 @@ function renderExercises(){
   list.querySelectorAll("[data-ex-history]").forEach(btn=>{
     btn.addEventListener("click", ()=>{
       const id = btn.getAttribute("data-ex-history");
-      openHistory(id);
+      openHistoryTable(id);
     });
   });
 }
@@ -530,84 +533,43 @@ $("#createExerciseBtn").addEventListener("click", ()=>{
   renderExercises();
 });
 
-// ---- History (Chart) ----
-function openHistory(exId){
-  // Screen immer öffnen – selbst wenn Chart.js fehlt (dann zeigen wir Hinweis)
+// ---- History: Tabelle ----
+function renderHistoryInit(){
+  const exs = loadJSON(LS_KEYS.EXERCISES, []);
+  const select = $("#historyExerciseSelect");
+  select.innerHTML = exs.map(e=>`<option value="${e.id}">${e.name}</option>`).join("");
+  select.onchange = ()=> openHistoryTable(select.value);
+  if (exs[0]) openHistoryTable(exs[0].id);
+}
+
+function openHistoryTable(exId){
+  // Screen anzeigen
   showScreen("screen-history");
 
+  // Select korrekt setzen
   const select = $("#historyExerciseSelect");
-  const exs = loadJSON(LS_KEYS.EXERCISES, []);
-  select.innerHTML = exs.map(e=>`<option value="${e.id}" ${e.id===exId?"selected":""}>${e.name}</option>`).join("");
-  select.onchange = ()=> drawHistory(select.value);
+  if (select.value !== exId) select.value = exId;
 
-  // Wenn Chart.js noch nicht verfügbar (z.B. erstes Mal offline), Hinweis anzeigen
-  if (typeof Chart === "undefined") {
-    const ctx = $("#historyChart").getContext("2d");
-    ctx.clearRect(0,0,ctx.canvas.width, ctx.canvas.height);
-    // Kleiner Text-Hinweis statt Fehlers
-    ctx.fillStyle = "#9eabbc";
-    ctx.font = "16px system-ui";
-    ctx.fillText("Verlauf benötigt einmalig Internet (Chart.js). Öffne die App kurz online.", 10, 30);
+  // Logs holen & rendern
+  const logs = loadJSON(LS_KEYS.LOGS, []).filter(l=>l.exerciseId===exId)
+    .sort((a,b)=> new Date(b.date) - new Date(a.date)); // neueste oben
+
+  const tbody = $("#historyTbody");
+  if (!logs.length){
+    tbody.innerHTML = `<tr><td colspan="2" style="color:var(--muted);padding:12px">Noch keine Einträge.</td></tr>`;
     return;
   }
 
-  drawHistory(exId);
-}
-
-function drawHistory(exId){
-  const ctx = $("#historyChart").getContext("2d");
-  const logs = loadJSON(LS_KEYS.LOGS, []).filter(l=>l.exerciseId===exId);
-
-  const data = logs.map(l=>{
-    const m = (l.load||"").match(/-?\d+(\.\d+)?/);
-    const num = m ? parseFloat(m[0]) : null;
-    return { x: new Date(l.date), y: num, difficulty: l.difficulty, load: l.load };
-  }).filter(p=>p.y!==null).sort((a,b)=>a.x-b.x);
-
-  if (state.historyChart) { try { state.historyChart.destroy(); } catch(e){} }
-
-  const colors = { Easy: "#26d07c", OK: "#ffc857", Hard: "#ff5a5f" };
-  try{
-    state.historyChart = new Chart(ctx, {
-      type: "line",
-      data: {
-        datasets: [{
-          label: "Load",
-          data: data,
-          parsing: false,
-          borderColor: "#2f80ed",
-          pointBackgroundColor: data.map(p=>colors[p.difficulty]||"#2f80ed"),
-          pointRadius: 4,
-          borderWidth: 2,
-          tension: 0.2,
-        }]
-      },
-      options: {
-        responsive: true,
-        scales: {
-          x: { type: "time", time: { unit: "day" }, ticks: { color: "#a9afbd" }, grid: { color: "#222632" } },
-          y: { ticks: { color: "#a9afbd" }, grid: { color: "#222632" } }
-        },
-        plugins: {
-          legend: { labels: { color: "#a9afbd" } },
-          tooltip: {
-            callbacks: {
-              label: (ctx)=> {
-                const p = data[ctx.dataIndex];
-                return ` ${p.y} ( ${p.load} · ${p.difficulty} )`;
-              }
-            }
-          }
-        }
-      }
-    });
-  }catch(err){
-    // Falls Adapter für time-scale fehlt o.ä.: Text-Hinweis
-    ctx.clearRect(0,0,ctx.canvas.width, ctx.canvas.height);
-    ctx.fillStyle = "#9eabbc";
-    ctx.font = "16px system-ui";
-    ctx.fillText("Konnte Chart nicht rendern. Öffne einmal online, dann klappt's offline.", 10, 30);
-  }
+  tbody.innerHTML = logs.map(l=>{
+    const diffClass = l.difficulty==="Hard" ? "badge-hard" : (l.difficulty==="Easy" ? "badge-easy" : "badge-ok");
+    const loadTxt = l.load && l.load.trim().length ? l.load : "—";
+    return `
+      <tr>
+        <td>${fmtDate(l.date)}</td>
+        <td><span class="badge ${diffClass}">${loadTxt}</span></td>
+      </tr>
+    `;
+  }).join("");
 }
 
 // ---- Export / Import ----

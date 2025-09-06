@@ -1,4 +1,4 @@
-/* ===== Training Log – clean & compact ===== */
+/* ===== Training Log – clean & compact (v2) ===== */
 :root{
   --bg:#0c0f13;
   --panel:#0f1319;
@@ -35,7 +35,7 @@ html,body{
 .spacer{flex:1}
 
 /* Screens */
-.screen{display:none; padding:16px 14px 96px; max-width:780px; margin:0 auto}
+.screen{display:none; padding:16px 14px 110px; max-width:780px; margin:0 auto}
 .screen.active{display:block}
 h1,h2,h3{margin:6px 0 12px}
 h2{font-size:24px; letter-spacing:.2px}
@@ -44,13 +44,14 @@ h2{font-size:24px; letter-spacing:.2px}
 .card{
   background:var(--card); border:1px solid var(--line); border-radius:14px;
   padding:14px; margin:12px 0;
-  box-shadow: 0 6px 18px rgba(0,0,0,.25);
+  box-shadow:0 6px 18px rgba(0,0,0,.25);
 }
 .label{display:block; color:var(--muted); font-size:13px; margin:6px 0 6px}
 .input,.select{
   width:100%; padding:12px 14px; font-size:17px; border-radius:12px;
   border:1px solid var(--line); background:#0e141c; color:var(--text); outline:none;
 }
+.checkbox{display:flex; align-items:center; gap:8px; margin-top:10px; color:var(--muted)}
 
 /* Buttons */
 .primary-btn,.secondary-btn,.list-btn{
@@ -92,14 +93,21 @@ h2{font-size:24px; letter-spacing:.2px}
 .diff-btn[data-val="Hard"]{background:#2a1212}
 .diff-btn[data-selected="true"]{outline:2px solid var(--accent)}
 
-/* Timer: fokussiert, kompakt */
-.timer-ui{display:flex; flex-direction:column; align-items:center; gap:6px; margin-top:14px}
-.countdown{font-size:44px; color:var(--muted)}
+/* Timer – Zahl ÜBER „GO“ (per order) */
+.timer-ui{
+  display:flex; flex-direction:column; align-items:center; gap:8px; margin-top:16px
+}
+.timer-ui #phaseNumber{order:1}
+.timer-ui #countdown{order:2}
+.timer-ui #repPhase{order:3}
+.timer-ui #repCounter{order:4}
+
+.countdown{font-size:46px; color:var(--muted)}
 .rep-counter{font-size:16px; color:var(--muted)}
-.phase{font-size:14px; color:var(--muted)}
+.phase{font-size:18px; color:var(--text); margin-top:6px}
 .phase-number{
-  margin-top:2px; font-size:84px; line-height:1; font-weight:900;
-  padding:6px 14px; border-radius:16px; background:#0e141c; border:1px solid var(--line)
+  font-size:92px; font-weight:900; line-height:1;
+  padding:6px 16px; border-radius:18px; background:#0e141c; border:1px solid var(--line)
 }
 .phase-number.up{color:var(--green)}
 .phase-number.down{color:var(--red)}
@@ -114,17 +122,28 @@ h2{font-size:24px; letter-spacing:.2px}
   border-radius:999px; padding:5px 10px; font-size:12px
 }
 
-/* Menu */
+/* Menü-Liste */
 .menu-list{display:flex; flex-direction:column; gap:10px}
 
-/* Fixed footer primary */
+/* ===== Fixe Footer-Actions ===== */
 .footer-actions{
   position:fixed; left:0; right:0; bottom:0; z-index:40;
-  background:linear-gradient(180deg, transparent 0%, var(--bg) 30%);
-  padding:10px 14px 16px; display:flex; justify-content:center;
+  background:linear-gradient(180deg, transparent 0%, var(--bg) 45%);
+  padding:10px 14px 18px; display:flex; justify-content:center; gap:10px;
 }
+
+/* „Nächste Übung“ (existiert schon) */
 .footer-actions .primary-btn{
   width:min(640px,100%); font-size:18px; padding:14px 18px; border-radius:14px;
+}
+
+/* „Übung starten“ nach unten ziehen */
+#startExerciseBtn{
+  position:fixed; left:50%; transform:translateX(-50%);
+  bottom:72px; /* etwas über dem anderen Button, damit nie überlappt */
+  width:min(640px, 92%);
+  font-size:18px; padding:14px 18px; border-radius:14px;
+  z-index:35;
 }
 
 /* Rotation rows */

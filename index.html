@@ -2,17 +2,12 @@
 <html lang="de">
 <head>
   <meta charset="utf-8" />
-  <meta
-    name="viewport"
-    content="width=device-width, initial-scale=1, user-scalable=no"
-  />
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
   <title>Training Log – PWA</title>
   <link rel="manifest" href="manifest.json" />
   <link rel="stylesheet" href="style.css" />
   <meta name="theme-color" content="#111111" />
   <link rel="icon" href="icons/icon-192.png" />
-  <!-- Chart.js (für Verlauf). Wird offline gecached vom Service Worker -->
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
   <header class="app-header">
@@ -75,10 +70,10 @@
       </div>
 
       <div id="timerUI" class="timer-ui hidden">
+        <div id="phaseNumber" class="phase-number">–</div>
         <div id="countdown" class="countdown">3</div>
         <div id="repPhase" class="phase">Bereit …</div>
         <div id="repCounter" class="rep-counter">0 / 10</div>
-        <div id="phaseNumber" class="phase-number">–</div>
       </div>
 
       <div class="footer-actions">
@@ -92,6 +87,7 @@
         <button class="list-btn" data-target="screen-rotation">Rotation</button>
         <button class="list-btn" data-target="screen-trainings">Trainings</button>
         <button class="list-btn" data-target="screen-exercises">Übungen</button>
+        <button class="list-btn" data-target="screen-history">Verlauf (Tabelle)</button>
         <button id="exportBtn" class="list-btn">Export (JSON)</button>
         <label class="file-btn">
           Import (JSON)
@@ -159,25 +155,28 @@
       <button class="secondary-btn to-menu">Zurück</button>
     </section>
 
-    <!-- VERLAUF pro Übung -->
+    <!-- VERLAUF (Tabelle) -->
     <section id="screen-history" class="screen">
       <h2>Verlauf je Übung</h2>
       <label class="label">Übung wählen</label>
       <select id="historyExerciseSelect" class="select"></select>
       <div class="card">
-        <canvas id="historyChart" height="160"></canvas>
+        <table class="tbl">
+          <thead>
+            <tr>
+              <th>Datum</th>
+              <th>Load</th>
+            </tr>
+          </thead>
+          <tbody id="historyTbody">
+            <!-- Rows via JS -->
+          </tbody>
+        </table>
       </div>
       <button class="secondary-btn to-menu">Zurück</button>
     </section>
 
   </main>
-
-  <audio id="beepHi" preload="auto">
-    <source src="data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAESsAACJWAAACABAAZGF0YQAAAAA=" type="audio/wav">
-  </audio>
-  <audio id="beepLo" preload="auto">
-    <source src="data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAESsAACJWAAACABAAZGF0YQAAAAA=" type="audio/wav">
-  </audio>
 
   <script src="app.js"></script>
   <script>

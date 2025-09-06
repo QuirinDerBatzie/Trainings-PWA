@@ -1,8 +1,8 @@
 /* ============
-   Training Log PWA – App Logic (vollständige Version mit Start-Button-Hide)
+   Training Log PWA – App Logic (Sound fix + Verlauf-Fallback)
    ============ */
 
-// ---- Storage helpers (LocalStorage, simpel & robust) ----
+// ---- Storage helpers (LocalStorage) ----
 const LS_KEYS = {
   EXERCISES: "tl_exercises",
   TRAININGS: "tl_trainings",
@@ -17,12 +17,11 @@ const loadJSON = (k, fallback) => {
 };
 const saveJSON = (k, v) => localStorage.setItem(k, JSON.stringify(v));
 
-// ---- Default Data (preload from our plan) ----
+// ---- Default Data ----
 function ensureDefaults() {
   const meta = loadJSON(LS_KEYS.META, {});
   if (meta.version === 1) return;
 
-  // Exercises (each as separate item with Name + Class)
   const exercises = [
     { id: "ex_chest_press", name: "Chest Press", class: "Push", mode: "machine", archived: false },
     { id: "ex_shoulder_press", name: "Shoulder Press", class: "Push", mode: "machine", archived: false },
@@ -52,12 +51,7 @@ function ensureDefaults() {
     { id: "tr_bbw2", title: "B&BW 2 – Push & Legs", exerciseIds: ["ex_pushups","ex_band_chest_fly","ex_bulgarian_split_squat","ex_band_hip_thrust"] },
   ];
 
-  const rotation = {
-    t1: "tr_gym1", // 1-7
-    t2: "tr_bbw1", // 8-14
-    t3: "tr_gym2", // 15-21
-    t4: "tr_bbw2", // 22-end
-  };
+  const rotation = { t1: "tr_gym1", t2: "tr_bbw1", t3: "tr_gym2", t4: "tr_bbw2" };
 
   saveJSON(LS_KEYS.EXERCISES, exercises);
   saveJSON(LS_KEYS.TRAININGS, trainings);
@@ -74,6 +68,7 @@ let state = {
   restTimerInterval: null,
   restStartTs: null,
   historyChart: null,
+  audioCtx: null, // WebAudio
 };
 
 // ---- Utilities ----
@@ -117,16 +112,13 @@ function lastLogForExercise(exId){
 // ---- Dashboard ----
 function renderDashboard(){
   const todayId = todayTrainingIdByDate();
-  const heading = $("#todayTrainingHeading");
-  heading.textContent = "Heute: " + getTrainingLabel(todayId);
+  $("#todayTrainingHeading").textContent = "Heute: " + getTrainingLabel(todayId);
   state.currentTrainingId = todayId;
 
-  // Override dropdown
   const override = $("#overrideSelect");
   override.innerHTML = `<option value="">Nein</option>` + loadJSON(LS_KEYS.TRAININGS, [])
     .map(t=>`<option value="${t.id}">${t.title}</option>`).join("");
 }
-
 $("#startTrainingBtn").addEventListener("click", ()=>{
   const override = $("#overrideSelect").value;
   const chosen = override || state.currentTrainingId;
@@ -202,19 +194,15 @@ function openExercise(exId){
   const input = $("#loadInput");
   input.value = last?.load ?? "";
 
-  // Difficulty Buttons: letzte Auswahl markieren
   $$(".diff-btn").forEach(btn=>{ btn.dataset.selected = "false"; });
   if (last?.difficulty){
     const btn = $(`.diff-btn[data-val="${last.difficulty}"]`);
     if (btn) btn.dataset.selected = "true";
   }
 
-  // Timer/Buttons UI initialisieren
   $("#timerUI").classList.add("hidden");
   $("#saveAndNextBtn").classList.add("hidden");
-
-  // WICHTIG: Start-Button beim Öffnen EINBLENDEN (sichtbar je Übung genau 1x)
-  $("#startExerciseBtn").classList.remove("hidden");
+  $("#startExerciseBtn").classList.remove("hidden"); // sichtbar je Übung genau 1x
 
   showScreen("screen-exercise");
 }
@@ -223,7 +211,7 @@ $("#backToPickerBtn").addEventListener("click", ()=>{
   showScreen("screen-exercise-picker");
 });
 
-// Difficulty Selection (segmented)
+// Difficulty segmented
 $(".difficulty-row")?.addEventListener?.("click", (e)=>{
   const btn = e.target.closest(".diff-btn");
   if (!btn) return;
@@ -231,19 +219,39 @@ $(".difficulty-row")?.addEventListener?.("click", (e)=>{
   btn.dataset.selected = "true";
 });
 
-// Übung starten Button – nach Klick ausblenden (bleibt weg)
+// ---- WebAudio: zuverlässiger Beep (ohne Audio-Files) ----
+function ensureAudioCtx(){
+  if (!state.audioCtx) {
+    const ACtx = window.AudioContext || window.webkitAudioContext;
+    if (ACtx) state.audioCtx = new ACtx();
+  }
+  // Manche Browser pausieren Context – beim User-Click wieder aufnehmen
+  if (state.audioCtx && state.audioCtx.state === "suspended") {
+    state.audioCtx.resume().catch(()=>{});
+  }
+}
+function beep({freq=880, duration=120, type="sine", vol=0.2}={}){
+  const withSound = $("#withSound")?.checked;
+  if (!withSound || !state.audioCtx) return;
+  const ctx = state.audioCtx;
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
+  osc.type = type;
+  osc.frequency.value = freq;
+  gain.gain.setValueAtTime(0, ctx.currentTime);
+  gain.gain.linearRampToValueAtTime(vol, ctx.currentTime + 0.01);
+  gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration/1000);
+  osc.connect(gain).connect(ctx.destination);
+  osc.start();
+  osc.stop(ctx.currentTime + duration/1000 + 0.02);
+}
+
+// Übung starten → Button ausblenden + AudioCtx aktivieren + Timer starten
 document.getElementById("startExerciseBtn").addEventListener("click", () => {
   document.getElementById("startExerciseBtn").classList.add("hidden");
+  ensureAudioCtx();
   startExerciseTimer();
 });
-
-function playBeep(which){
-  const withSound = $("#withSound").checked;
-  if (!withSound) return;
-  const el = which==="hi" ? $("#beepHi") : $("#beepLo");
-  el.currentTime = 0;
-  el.play().catch(()=>{ /* ignore autoplay restrictions */ });
-}
 
 // 3s countdown, dann 10 Reps: up 5s (green), down 5s (red)
 async function startExerciseTimer(){
@@ -255,9 +263,7 @@ async function startExerciseTimer(){
   $("#timerUI").classList.remove("hidden");
   $("#saveAndNextBtn").classList.add("hidden");
 
-  // 3..2..1
   for (let c=3;c>=1;c--){
-    // Zahl über "GO": (CSS ordnet phaseNumber > countdown)
     phaseNumber.textContent = "–";
     countdown.textContent = String(c);
     phaseText.textContent = "Bereit …";
@@ -265,8 +271,9 @@ async function startExerciseTimer(){
     await wait(1000);
   }
   countdown.textContent = "GO";
+  // kurzer Start-Beep
+  beep({freq:900, duration:100, type:"sine"});
 
-  // 10 reps
   for (let rep=1;rep<=10;rep++){
     repCounter.textContent = `${rep} / 10`;
 
@@ -274,7 +281,7 @@ async function startExerciseTimer(){
     phaseText.textContent = "Hoch";
     phaseNumber.classList.remove("down");
     phaseNumber.classList.add("up");
-    playBeep("hi");
+    beep({freq:880, duration:120, type:"sine"});
     for (let i=1;i<=5;i++){
       phaseNumber.textContent = String(i);
       await wait(1000);
@@ -284,7 +291,7 @@ async function startExerciseTimer(){
     phaseText.textContent = "Runter";
     phaseNumber.classList.remove("up");
     phaseNumber.classList.add("down");
-    playBeep("lo");
+    beep({freq:550, duration:120, type:"sine"});
     for (let i=5;i>=1;i--){
       phaseNumber.textContent = String(i);
       await wait(1000);
@@ -304,7 +311,6 @@ $("#saveAndNextBtn").addEventListener("click", ()=>{
   const diffBtn = $$(".diff-btn").find(b=>b.dataset.selected==="true");
   const difficulty = diffBtn ? diffBtn.dataset.val : "OK";
 
-  // Save log
   const logs = loadJSON(LS_KEYS.LOGS, []);
   logs.push({
     id: "log_" + Date.now(),
@@ -316,18 +322,12 @@ $("#saveAndNextBtn").addEventListener("click", ()=>{
   });
   saveJSON(LS_KEYS.LOGS, logs);
 
-  // Exercise aus Queue entfernen
   const idx = state.session.exerciseQueue.indexOf(exId);
   if (idx >= 0) state.session.exerciseQueue.splice(idx,1);
 
-  // Für Zusammenfassung
   const ex = getExercise(exId);
-  state.session.results.push({
-    name: ex?.name ?? exId,
-    load, difficulty
-  });
+  state.session.results.push({ name: ex?.name ?? exId, load, difficulty });
 
-  // Zurück zur Auswahl + Resttimer neu
   startRestTimer();
   renderExercisePicker();
   showScreen("screen-exercise-picker");
@@ -532,60 +532,82 @@ $("#createExerciseBtn").addEventListener("click", ()=>{
 
 // ---- History (Chart) ----
 function openHistory(exId){
+  // Screen immer öffnen – selbst wenn Chart.js fehlt (dann zeigen wir Hinweis)
+  showScreen("screen-history");
+
   const select = $("#historyExerciseSelect");
   const exs = loadJSON(LS_KEYS.EXERCISES, []);
   select.innerHTML = exs.map(e=>`<option value="${e.id}" ${e.id===exId?"selected":""}>${e.name}</option>`).join("");
   select.onchange = ()=> drawHistory(select.value);
+
+  // Wenn Chart.js noch nicht verfügbar (z.B. erstes Mal offline), Hinweis anzeigen
+  if (typeof Chart === "undefined") {
+    const ctx = $("#historyChart").getContext("2d");
+    ctx.clearRect(0,0,ctx.canvas.width, ctx.canvas.height);
+    // Kleiner Text-Hinweis statt Fehlers
+    ctx.fillStyle = "#9eabbc";
+    ctx.font = "16px system-ui";
+    ctx.fillText("Verlauf benötigt einmalig Internet (Chart.js). Öffne die App kurz online.", 10, 30);
+    return;
+  }
+
   drawHistory(exId);
-  showScreen("screen-history");
 }
 
 function drawHistory(exId){
   const ctx = $("#historyChart").getContext("2d");
   const logs = loadJSON(LS_KEYS.LOGS, []).filter(l=>l.exerciseId===exId);
-  // parse numeric "load": erste Zahl in load-string
+
   const data = logs.map(l=>{
     const m = (l.load||"").match(/-?\d+(\.\d+)?/);
     const num = m ? parseFloat(m[0]) : null;
     return { x: new Date(l.date), y: num, difficulty: l.difficulty, load: l.load };
   }).filter(p=>p.y!==null).sort((a,b)=>a.x-b.x);
 
-  const colors = { Easy: "#26d07c", OK: "#ffc857", Hard: "#ff5a5f" };
+  if (state.historyChart) { try { state.historyChart.destroy(); } catch(e){} }
 
-  if (state.historyChart) { state.historyChart.destroy(); }
-  state.historyChart = new Chart(ctx, {
-    type: "line",
-    data: {
-      datasets: [{
-        label: "Load",
-        data: data,
-        parsing: false,
-        borderColor: "#2f80ed",
-        pointBackgroundColor: data.map(p=>colors[p.difficulty]||"#2f80ed"),
-        pointRadius: 4,
-        borderWidth: 2,
-        tension: 0.2,
-      }]
-    },
-    options: {
-      responsive: true,
-      scales: {
-        x: { type: "time", time: { unit: "day" }, ticks: { color: "#a9afbd" }, grid: { color: "#222632" } },
-        y: { ticks: { color: "#a9afbd" }, grid: { color: "#222632" } }
+  const colors = { Easy: "#26d07c", OK: "#ffc857", Hard: "#ff5a5f" };
+  try{
+    state.historyChart = new Chart(ctx, {
+      type: "line",
+      data: {
+        datasets: [{
+          label: "Load",
+          data: data,
+          parsing: false,
+          borderColor: "#2f80ed",
+          pointBackgroundColor: data.map(p=>colors[p.difficulty]||"#2f80ed"),
+          pointRadius: 4,
+          borderWidth: 2,
+          tension: 0.2,
+        }]
       },
-      plugins: {
-        legend: { labels: { color: "#a9afbd" } },
-        tooltip: {
-          callbacks: {
-            label: (ctx)=> {
-              const p = data[ctx.dataIndex];
-              return ` ${p.y} ( ${p.load} · ${p.difficulty} )`;
+      options: {
+        responsive: true,
+        scales: {
+          x: { type: "time", time: { unit: "day" }, ticks: { color: "#a9afbd" }, grid: { color: "#222632" } },
+          y: { ticks: { color: "#a9afbd" }, grid: { color: "#222632" } }
+        },
+        plugins: {
+          legend: { labels: { color: "#a9afbd" } },
+          tooltip: {
+            callbacks: {
+              label: (ctx)=> {
+                const p = data[ctx.dataIndex];
+                return ` ${p.y} ( ${p.load} · ${p.difficulty} )`;
+              }
             }
           }
         }
       }
-    }
-  });
+    });
+  }catch(err){
+    // Falls Adapter für time-scale fehlt o.ä.: Text-Hinweis
+    ctx.clearRect(0,0,ctx.canvas.width, ctx.canvas.height);
+    ctx.fillStyle = "#9eabbc";
+    ctx.font = "16px system-ui";
+    ctx.fillText("Konnte Chart nicht rendern. Öffne einmal online, dann klappt's offline.", 10, 30);
+  }
 }
 
 // ---- Export / Import ----
